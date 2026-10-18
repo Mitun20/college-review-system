@@ -1,0 +1,446 @@
+openapi: 3.0.3
+info:
+  title: College Review System API
+  version: 1.0.0
+  description: REST API for college management, authentication, and student reviews.
+
+servers:
+  - url: http://localhost:5000
+    description: Local development server
+
+tags:
+  - name: General
+  - name: Authentication
+  - name: Colleges
+  - name: Reviews
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    RegisterRequest:
+      type: object
+      required: [name, email, password]
+      properties:
+        name:
+          type: string
+          minLength: 2
+          maxLength: 100
+          example: Test Student
+        email:
+          type: string
+          format: email
+          example: student@example.com
+        password:
+          type: string
+          minLength: 8
+          maxLength: 128
+          example: SecurePass123
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          example: student@example.com
+        password:
+          type: string
+          example: SecurePass123
+
+    CollegeRequest:
+      type: object
+      required: [name, city]
+      properties:
+        name:
+          type: string
+          minLength: 2
+          maxLength: 150
+          example: Example Engineering College
+        city:
+          type: string
+          minLength: 2
+          maxLength: 100
+          example: Chennai
+        state:
+          type: string
+          maxLength: 100
+          example: Tamil Nadu
+        description:
+          type: string
+          maxLength: 1000
+          example: An engineering college.
+        website:
+          type: string
+          format: uri
+          example: https://example.edu
+
+    ReviewRequest:
+      type: object
+      required: [college, rating, comment]
+      properties:
+        college:
+          type: string
+          pattern: '^[0-9a-fA-F]{24}$'
+          description: MongoDB ObjectId of the college.
+          example: 507f1f77bcf86cd799439011
+        rating:
+          type: integer
+          minimum: 1
+          maximum: 5
+          example: 4
+        comment:
+          type: string
+          minLength: 3
+          maxLength: 2000
+          example: Good teaching and campus facilities.
+
+    Error:
+      type: object
+      properties:
+        message:
+          type: string
+          example: Validation failed
+        errors:
+          type: array
+          items:
+            type: string
+
+paths:
+  /:
+    get:
+      tags: [General]
+      summary: Check whether the API is running
+      responses:
+        '200':
+          description: API is running
+
+  /api/auth/register:
+    post:
+      tags: [Authentication]
+      summary: Register a student account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: Registration successful
+        '400':
+          description: Validation failed
+        '409':
+          description: Email is already registered
+
+  /api/auth/login:
+    post:
+      tags: [Authentication]
+      summary: Log in and receive a JWT
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login successful; response includes token and user
+        '400':
+          description: Validation failed
+        '401':
+          description: Invalid email or password
+
+  /api/auth/me:
+    get:
+      tags: [Authentication]
+      summary: Check the current authenticated user
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Authenticated user information
+        '401':
+          description: Missing or invalid token
+
+  /api/auth/admin-test:
+    get:
+      tags: [Authentication]
+      summary: Verify admin access
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Admin access granted
+        '401':
+          description: Authentication required
+        '403':
+          description: Admin role required
+
+  /api/colleges:
+    get:
+      tags: [Colleges]
+      summary: List colleges with average rating and review count
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: College list with aggregated rating statistics
+        '401':
+          description: Authentication required
+
+    post:
+      tags: [Colleges]
+      summary: Create a college (admin only)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CollegeRequest'
+      responses:
+        '201':
+          description: College created
+        '400':
+          description: Validation failed
+        '401':
+          description: Authentication required
+        '403':
+          description: Admin role required
+        '409':
+          description: College with this name already exists in this city
+
+  /api/colleges/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: '^[0-9a-fA-F]{24}$'
+        description: MongoDB college ObjectId
+
+    get:
+      tags: [Colleges]
+      summary: Get a college by ID
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: College details
+        '400':
+          description: Invalid college ID
+        '401':
+          description: Authentication required
+        '404':
+          description: College not found
+
+    put:
+      tags: [Colleges]
+      summary: Update a college (admin only)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              minProperties: 1
+              properties:
+                name:
+                  type: string
+                  minLength: 2
+                  maxLength: 150
+                city:
+                  type: string
+                  minLength: 2
+                  maxLength: 100
+                state:
+                  type: string
+                  maxLength: 100
+                description:
+                  type: string
+                  maxLength: 1000
+                website:
+                  type: string
+                  format: uri
+      responses:
+        '200':
+          description: College updated
+        '400':
+          description: Invalid ID or validation failed
+        '401':
+          description: Authentication required
+        '403':
+          description: Admin role required
+        '404':
+          description: College not found
+        '409':
+          description: Duplicate college name in this city
+
+    delete:
+      tags: [Colleges]
+      summary: Delete a college (admin only)
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: College deleted
+        '400':
+          description: Invalid college ID
+        '401':
+          description: Authentication required
+        '403':
+          description: Admin role required
+        '404':
+          description: College not found
+
+  /api/reviews:
+    get:
+      tags: [Reviews]
+      summary: List reviews with pagination, filters, and comment search
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+        - name: college
+          in: query
+          schema:
+            type: string
+          description: Filter by college ObjectId
+        - name: student
+          in: query
+          schema:
+            type: string
+          description: Filter by student ObjectId
+        - name: search
+          in: query
+          schema:
+            type: string
+            maxLength: 100
+          description: Case-insensitive search in review comments
+      responses:
+        '200':
+          description: Paginated reviews with total and totalPages
+        '400':
+          description: Invalid filter ID or search too long
+        '401':
+          description: Authentication required
+
+    post:
+      tags: [Reviews]
+      summary: Create a review (student only)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReviewRequest'
+      responses:
+        '201':
+          description: Review created
+        '400':
+          description: Validation failed
+        '401':
+          description: Authentication required
+        '403':
+          description: Student role required
+        '404':
+          description: College not found
+
+  /api/reviews/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: '^[0-9a-fA-F]{24}$'
+        description: MongoDB review ObjectId
+
+    get:
+      tags: [Reviews]
+      summary: Get a review by ID
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Review details
+        '400':
+          description: Invalid review ID
+        '401':
+          description: Authentication required
+        '404':
+          description: Review not found
+
+    put:
+      tags: [Reviews]
+      summary: Update a review (author or admin)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              minProperties: 1
+              properties:
+                rating:
+                  type: integer
+                  minimum: 1
+                  maximum: 5
+                comment:
+                  type: string
+                  minLength: 3
+                  maxLength: 2000
+      responses:
+        '200':
+          description: Review updated
+        '400':
+          description: Invalid ID or validation failed
+        '401':
+          description: Authentication required
+        '403':
+          description: Only the author or an admin may update
+        '404':
+          description: Review not found
+
+    delete:
+      tags: [Reviews]
+      summary: Delete a review (author or admin)
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Review deleted
+        '400':
+          description: Invalid review ID
+        '401':
+          description: Authentication required
+        '403':
+          description: Only the author or an admin may delete
+        '404':
+          description: Review not found
